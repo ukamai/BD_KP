@@ -1,0 +1,14 @@
+# secrets
+.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# logs
+*.log
+
+# docker volumes (if ever bind-mounted)
+pgdata/

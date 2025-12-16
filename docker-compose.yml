@@ -14,5 +14,21 @@ services:
       retries: 20
     restart: unless-stopped
 
+  api:
+    build:
+      context: ./api
+    container_name: repair_db_api
+    env_file: .env
+    environment:
+      DATABASE_URL: "postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   repair_pgdata:

@@ -1,6 +1,7 @@
 BEGIN;
 
 TRUNCATE
+  import_errors,
   audit_log,
   defects,
   inventory_transactions,

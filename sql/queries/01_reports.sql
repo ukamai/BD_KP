@@ -142,3 +142,21 @@ FROM audit_log
 WHERE entity_type = 'project_tasks'
 ORDER BY action_timestamp DESC
 LIMIT 50;
+
+-- Q16. Сколько всего потрачено по каждому проекту (скалярная функция)
+SELECT
+  p.project_id,
+  p.project_name,
+  p.total_budget,
+  fn_project_total_spent(p.project_id) AS total_spent,
+  (p.total_budget - fn_project_total_spent(p.project_id)) AS budget_delta
+FROM projects p
+ORDER BY p.project_id;
+
+-- Q17. Отчёт по проектам (табличная функция) — все проекты
+SELECT *
+FROM fn_report_projects(NULL, NULL, NULL);
+
+-- Q18. Отчёт по проектам (табличная функция) — только active
+SELECT *
+FROM fn_report_projects('active', NULL, NULL);
