@@ -92,3 +92,12 @@ def list_project_tasks(project_id: int, db: Session = Depends(get_db)):
     return db.execute(
         select(ProjectTask).where(ProjectTask.project_id == project_id).order_by(ProjectTask.task_id)
     ).scalars().all()
+
+
+@router.get("/{project_id}/phases")
+def list_project_phases(project_id: int, db: Session = Depends(get_db)):
+    from app.db.models.planning import ProjectPhase
+
+    return db.execute(
+        select(ProjectPhase).where(ProjectPhase.project_id == project_id).order_by(ProjectPhase.phase_id)
+    ).scalars().all()

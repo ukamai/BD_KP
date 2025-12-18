@@ -23,6 +23,26 @@ class TaskOut(BaseModel):
         from_attributes = True
 
 
+class TaskCreate(BaseModel):
+    project_id: int
+    phase_id: int
+    room_id: int | None = None
+    work_type_id: int
+    contractor_id: int | None = None
+
+    task_name: str = Field(min_length=1, max_length=200)
+    volume: float = Field(default=0, ge=0)
+    planned_cost: float = Field(default=0, ge=0)
+    actual_cost: float = Field(default=0, ge=0)
+
+    status: str = Field(default="planned", max_length=20)
+
+    planned_start_date: date | None = None
+    planned_end_date: date | None = None
+    actual_start_date: date | None = None
+    actual_end_date: date | None = None
+
+
 class TaskUpdate(BaseModel):
     status: str | None = Field(default=None, max_length=20)
     actual_cost: float | None = Field(default=None, ge=0)

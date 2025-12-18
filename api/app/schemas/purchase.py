@@ -17,6 +17,12 @@ class PurchaseOrderCreate(BaseModel):
     items: list[PurchaseOrderItemCreate] = Field(min_length=1)
 
 
+class PurchaseOrderUpdate(BaseModel):
+    status: str | None = Field(default=None, max_length=20)
+    expected_delivery_date: date | None = None
+    order_date: date | None = None
+
+
 class PurchaseOrderOut(BaseModel):
     po_id: int
     project_id: int
