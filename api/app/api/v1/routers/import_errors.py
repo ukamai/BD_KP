@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.db.models.imports import ImportError
 
 router = APIRouter()
+public_router = router
 
 
 @router.get("", response_model=list[dict])

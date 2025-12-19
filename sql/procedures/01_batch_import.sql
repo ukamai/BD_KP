@@ -1,11 +1,5 @@
 BEGIN;
 
--- Batch import для inventory_transactions.
--- p_rows: JSON-массив объектов:
--- [
---   {"project_id":1,"material_id":2,"task_id":10,"po_item_id":null,"transaction_type":"OUT","quantity":3,"unit_price":120,"transaction_date":"2025-12-01","comment":"..."},
---   ...
--- ]
 CREATE OR REPLACE PROCEDURE sp_batch_import_inventory_transactions(
   p_rows JSONB,
   p_source TEXT DEFAULT 'inventory_transactions_batch',
@@ -66,18 +60,19 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN
       INSERT INTO import_errors(source, payload, error_message, user_id, details)
       VALUES (
-        p_source,
+        COALESCE(p_source, 'inventory_transactions_batch'),
         v_row,
         SQLERRM,
         v_user_id,
         jsonb_build_object('sqlstate', SQLSTATE, 'index', v_i)
       );
 
-      IF p_fail_fast THEN
+      IF COALESCE(p_fail_fast, FALSE) THEN
         RAISE;
       END IF;
     END;
   END LOOP;
+
 END;
 $$;
 
