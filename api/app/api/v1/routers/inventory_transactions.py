@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
@@ -16,6 +18,12 @@ def list_inventory_transactions(
     material_id: int | None = None,
     task_id: int | None = None,
     transaction_type: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    sort_by: str = Query(default="inv_tx_id"),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     stmt = select(InventoryTransaction)
@@ -27,7 +35,30 @@ def list_inventory_transactions(
         stmt = stmt.where(InventoryTransaction.task_id == task_id)
     if transaction_type is not None:
         stmt = stmt.where(InventoryTransaction.transaction_type == transaction_type)
-    return db.execute(stmt.order_by(InventoryTransaction.inv_tx_id)).scalars().all()
+
+    if date_from is not None:
+        stmt = stmt.where(InventoryTransaction.transaction_date >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(InventoryTransaction.transaction_date <= date_to)
+
+    sort_map = {
+        "inv_tx_id": InventoryTransaction.inv_tx_id,
+        "project_id": InventoryTransaction.project_id,
+        "material_id": InventoryTransaction.material_id,
+        "task_id": InventoryTransaction.task_id,
+        "po_item_id": InventoryTransaction.po_item_id,
+        "transaction_type": InventoryTransaction.transaction_type,
+        "quantity": InventoryTransaction.quantity,
+        "unit_price": InventoryTransaction.unit_price,
+        "transaction_date": InventoryTransaction.transaction_date,
+    }
+    col = sort_map.get(sort_by)
+    if col is None:
+        raise HTTPException(status_code=400, detail="Invalid sort_by")
+    col = col.desc() if sort_dir == "desc" else col.asc()
+
+    stmt = stmt.order_by(col).limit(limit).offset(offset)
+    return db.execute(stmt).scalars().all()
 
 
 @router.get("/{inv_tx_id}", response_model=InventoryTransactionOut)

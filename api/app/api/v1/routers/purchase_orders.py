@@ -1,5 +1,6 @@
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date, datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, DataError
 from sqlalchemy.orm import Session
@@ -16,8 +17,47 @@ def _gen_po_number() -> str:
 
 
 @router.get("", response_model=list[PurchaseOrderOut])
-def list_purchase_orders(db: Session = Depends(get_db)):
-    return db.execute(select(PurchaseOrder).order_by(PurchaseOrder.po_id)).scalars().all()
+def list_purchase_orders(
+    project_id: int | None = None,
+    supplier_id: int | None = None,
+    status: str | None = None,
+    order_date_from: date | None = None,
+    order_date_to: date | None = None,
+    sort_by: str = Query(default="po_id"),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    stmt = select(PurchaseOrder)
+    if project_id is not None:
+        stmt = stmt.where(PurchaseOrder.project_id == project_id)
+    if supplier_id is not None:
+        stmt = stmt.where(PurchaseOrder.supplier_id == supplier_id)
+    if status is not None:
+        stmt = stmt.where(PurchaseOrder.status == status)
+    if order_date_from is not None:
+        stmt = stmt.where(PurchaseOrder.order_date >= order_date_from)
+    if order_date_to is not None:
+        stmt = stmt.where(PurchaseOrder.order_date <= order_date_to)
+
+    sort_map = {
+        "po_id": PurchaseOrder.po_id,
+        "project_id": PurchaseOrder.project_id,
+        "supplier_id": PurchaseOrder.supplier_id,
+        "po_number": PurchaseOrder.po_number,
+        "status": PurchaseOrder.status,
+        "total_amount": PurchaseOrder.total_amount,
+        "order_date": PurchaseOrder.order_date,
+        "expected_delivery_date": PurchaseOrder.expected_delivery_date,
+        "created_at": PurchaseOrder.created_at,
+    }
+    col = sort_map.get(sort_by)
+    if col is None:
+        raise HTTPException(status_code=400, detail="Invalid sort_by")
+    col = col.desc() if sort_dir == "desc" else col.asc()
+
+    return db.execute(stmt.order_by(col).limit(limit).offset(offset)).scalars().all()
 
 
 @router.post("", response_model=PurchaseOrderOut, status_code=201)

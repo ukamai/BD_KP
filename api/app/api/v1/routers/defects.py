@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
@@ -15,6 +17,15 @@ def list_defects(
     project_id: int | None = None,
     task_id: int | None = None,
     room_id: int | None = None,
+    contractor_id: int | None = None,
+    status: str | None = None,
+    severity: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    sort_by: str = Query(default="defect_id"),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     stmt = select(Defect)
@@ -28,7 +39,33 @@ def list_defects(
             stmt = stmt.where(ProjectTask.room_id == room_id)
     if task_id is not None:
         stmt = stmt.where(Defect.task_id == task_id)
-    return db.execute(stmt.order_by(Defect.defect_id)).scalars().all()
+    if contractor_id is not None:
+        stmt = stmt.where(Defect.contractor_id == contractor_id)
+    if status is not None:
+        stmt = stmt.where(Defect.status == status)
+    if severity is not None:
+        stmt = stmt.where(Defect.severity == severity)
+    if date_from is not None:
+        stmt = stmt.where(Defect.defect_date >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(Defect.defect_date <= date_to)
+
+    sort_map = {
+        "defect_id": Defect.defect_id,
+        "task_id": Defect.task_id,
+        "contractor_id": Defect.contractor_id,
+        "severity": Defect.severity,
+        "status": Defect.status,
+        "defect_date": Defect.defect_date,
+        "resolution_date": Defect.resolution_date,
+        "rework_cost": Defect.rework_cost,
+    }
+    col = sort_map.get(sort_by)
+    if col is None:
+        raise HTTPException(status_code=400, detail="Invalid sort_by")
+    col = col.desc() if sort_dir == "desc" else col.asc()
+
+    return db.execute(stmt.order_by(col).limit(limit).offset(offset)).scalars().all()
 
 
 @router.get("/{defect_id}", response_model=DefectOut)

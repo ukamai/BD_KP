@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, DataError
 from sqlalchemy.orm import Session
@@ -18,8 +18,39 @@ router = APIRouter()
 
 
 @router.get("/materials", response_model=list[MaterialOut])
-def list_materials(db: Session = Depends(get_db)):
-    return db.execute(select(Material).order_by(Material.material_id)).scalars().all()
+def list_materials(
+    category: str | None = None,
+    is_active: bool | None = None,
+    q: str | None = None,
+    sort_by: str = Query(default="material_id"),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    stmt = select(Material)
+    if category is not None:
+        stmt = stmt.where(Material.category == category)
+    if is_active is not None:
+        stmt = stmt.where(Material.is_active == is_active)
+    if q:
+        stmt = stmt.where(Material.material_name.ilike(f"%{q}%"))
+
+    sort_map = {
+        "material_id": Material.material_id,
+        "material_name": Material.material_name,
+        "category": Material.category,
+        "unit": Material.unit,
+        "manufacturer": Material.manufacturer,
+        "current_price": Material.current_price,
+        "is_active": Material.is_active,
+    }
+    col = sort_map.get(sort_by)
+    if col is None:
+        raise HTTPException(status_code=400, detail="Invalid sort_by")
+    col = col.desc() if sort_dir == "desc" else col.asc()
+
+    return db.execute(stmt.order_by(col).limit(limit).offset(offset)).scalars().all()
 
 
 @router.get("/materials/{material_id}", response_model=MaterialOut)
@@ -83,8 +114,29 @@ def delete_material(material_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/suppliers", response_model=list[SupplierOut])
-def list_suppliers(db: Session = Depends(get_db)):
-    return db.execute(select(Supplier).order_by(Supplier.supplier_id)).scalars().all()
+def list_suppliers(
+    q: str | None = None,
+    sort_by: str = Query(default="supplier_id"),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    stmt = select(Supplier)
+    if q:
+        stmt = stmt.where(Supplier.supplier_name.ilike(f"%{q}%"))
+
+    sort_map = {
+        "supplier_id": Supplier.supplier_id,
+        "supplier_name": Supplier.supplier_name,
+        "created_at": Supplier.created_at,
+    }
+    col = sort_map.get(sort_by)
+    if col is None:
+        raise HTTPException(status_code=400, detail="Invalid sort_by")
+    col = col.desc() if sort_dir == "desc" else col.asc()
+
+    return db.execute(stmt.order_by(col).limit(limit).offset(offset)).scalars().all()
 
 
 @router.get("/suppliers/{supplier_id}", response_model=SupplierOut)

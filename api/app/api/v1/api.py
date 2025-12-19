@@ -21,6 +21,7 @@ from app.api.v1.routers.batch_import import (
     public_router as batch_import_public_router,
 )
 from app.api.v1.routers.import_errors import router as import_errors_router
+from app.api.v1.routers.import_runs import router as import_runs_router
 
 api_router = APIRouter()
 
@@ -45,3 +46,4 @@ api_router.include_router(batch_import_router, prefix="/inventory-transactions",
 api_router.include_router(batch_import_public_router, tags=["batch_import"])
 
 api_router.include_router(import_errors_router, prefix="/import-errors", tags=["import_errors"])
+api_router.include_router(import_runs_router, prefix="/import-runs", tags=["import_runs"])

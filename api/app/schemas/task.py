@@ -48,3 +48,13 @@ class TaskUpdate(BaseModel):
     actual_cost: float | None = Field(default=None, ge=0)
     actual_start_date: date | None = None
     actual_end_date: date | None = None
+
+
+class TaskBulkStatusUpdate(BaseModel):
+    task_ids: list[int] = Field(min_length=1)
+    status: str = Field(min_length=1, max_length=20)
+
+
+class TaskBulkResult(BaseModel):
+    updated: int
+    task_ids: list[int]

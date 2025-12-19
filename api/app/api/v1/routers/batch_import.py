@@ -17,7 +17,7 @@ from app.schemas.imports import (
 )
 
 router = APIRouter()
-public_router = router
+public_router = APIRouter()
 
 
 def _fetch_int_list(db: Session, sql: str) -> list[int]:
@@ -29,8 +29,15 @@ def _fetch_int_list(db: Session, sql: str) -> list[int]:
     return out
 
 
-def _count_table(db: Session, table_name: str) -> int:
-    return int(db.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar() or 0)
+def _pick_date_in_range(d_from: date | None, d_to: date | None) -> date:
+    if d_from and d_to and d_from <= d_to:
+        days = (d_to - d_from).days
+        return d_from + timedelta(days=random.randint(0, days))
+    if d_from and not d_to:
+        return d_from
+    if d_to and not d_from:
+        return d_to
+    return _random_date(days_back=90)
 
 
 def _normalize_type(t: str) -> str:
@@ -89,38 +96,41 @@ def _po_items_by_project(db: Session) -> dict[int, list[int]]:
     return m
 
 
-def _call_batch_import_proc_with_deltas(
+def _call_batch_import_fn(
     db: Session,
     items: list[InventoryTransactionImportItem],
     source: str | None,
     fail_fast: bool,
+    meta: dict | None,
 ) -> dict:
     payload = [i.model_dump() for i in items]
     items_json = json.dumps(payload, ensure_ascii=False, default=str)
+    meta_json = json.dumps(meta or {}, ensure_ascii=False, default=str)
 
-    before_tx = _count_table(db, "inventory_transactions")
-    before_err = _count_table(db, "import_errors")
-
-    db.execute(
+    row = db.execute(
         text(
             """
-            CALL sp_batch_import_inventory_transactions(
-                CAST(:items_json AS jsonb),
-                CAST(:source AS text),
-                CAST(:fail_fast AS boolean)
+            SELECT run_id, total_rows, inserted_rows, failed_rows, status
+            FROM fn_batch_import_inventory_transactions(
+              CAST(:items_json AS jsonb),
+              CAST(:source AS text),
+              CAST(:fail_fast AS boolean),
+              CAST(:meta_json AS jsonb)
             )
             """
         ),
-        {"items_json": items_json, "source": source or "api", "fail_fast": fail_fast},
-    )
+        {"items_json": items_json, "source": source or "api", "fail_fast": fail_fast, "meta_json": meta_json},
+    ).mappings().first()
 
-    after_tx = _count_table(db, "inventory_transactions")
-    after_err = _count_table(db, "import_errors")
+    if not row:
+        return {"run_id": None, "total": 0, "inserted": 0, "failed": 0, "status": "unknown"}
 
     return {
-        "run_id": None,
-        "inserted": max(after_tx - before_tx, 0),
-        "failed": max(after_err - before_err, 0),
+        "run_id": int(row["run_id"]),
+        "total": int(row["total_rows"]),
+        "inserted": int(row["inserted_rows"]),
+        "failed": int(row["failed_rows"]),
+        "status": str(row["status"]),
     }
 
 
@@ -138,7 +148,7 @@ def _make_valid_qty_price(tx_type: str) -> tuple[float, float]:
 @router.post("/batch", response_model=BatchImportResponse)
 def batch_import_inventory_transactions(payload: BatchImportRequest, db: Session = Depends(get_db)):
     try:
-        res = _call_batch_import_proc_with_deltas(db, payload.items, payload.source, payload.fail_fast)
+        res = _call_batch_import_fn(db, payload.items, payload.source, payload.fail_fast, meta=None)
         db.commit()
         return BatchImportResponse(**res)
     except Exception as e:
@@ -199,7 +209,7 @@ def batch_import_inventory_transactions_faker(payload: BatchImportFakerRequest, 
 
         transaction_type = random.choice(tx_types)
         quantity, unit_price = _make_valid_qty_price(transaction_type)
-        transaction_date = _random_date(days_back=90)
+        transaction_date = _pick_date_in_range(payload.date_from, payload.date_to)
         comment = faker.sentence(nb_words=random.randint(3, 10))
 
         if make_invalid:
@@ -226,9 +236,25 @@ def batch_import_inventory_transactions_faker(payload: BatchImportFakerRequest, 
         )
 
     try:
-        res = _call_batch_import_proc_with_deltas(db, items, payload.source, payload.fail_fast)
+        meta = {
+            "generator": "faker",
+            "seed": seed,
+            "count": payload.count,
+            "invalid_rate": float(payload.invalid_rate or 0.0),
+        }
+        res = _call_batch_import_fn(db, items, payload.source, payload.fail_fast, meta=meta)
         db.commit()
         return BatchImportResponse(**res)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Batch import faker failed: {str(e)}")
+
+
+@public_router.post("/batch-import/inventory-transactions", response_model=BatchImportResponse)
+def public_batch_import_inventory_transactions(payload: BatchImportRequest, db: Session = Depends(get_db)):
+    return batch_import_inventory_transactions(payload, db)
+
+
+@public_router.post("/batch-import/inventory-transactions/faker", response_model=BatchImportResponse)
+def public_batch_import_inventory_transactions_faker(payload: BatchImportFakerRequest, db: Session = Depends(get_db)):
+    return batch_import_inventory_transactions_faker(payload, db)

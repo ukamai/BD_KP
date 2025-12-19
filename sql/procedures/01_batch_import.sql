@@ -1,9 +1,17 @@
 BEGIN;
 
-CREATE OR REPLACE PROCEDURE sp_batch_import_inventory_transactions(
+CREATE OR REPLACE FUNCTION fn_batch_import_inventory_transactions(
   p_rows JSONB,
   p_source TEXT DEFAULT 'inventory_transactions_batch',
-  p_fail_fast BOOLEAN DEFAULT FALSE
+  p_fail_fast BOOLEAN DEFAULT FALSE,
+  p_meta JSONB DEFAULT NULL
+)
+RETURNS TABLE (
+  run_id BIGINT,
+  total_rows INT,
+  inserted_rows INT,
+  failed_rows INT,
+  status TEXT
 )
 LANGUAGE plpgsql
 AS $$
@@ -21,6 +29,11 @@ DECLARE
   v_i INT;
   v_len INT;
   v_user_id BIGINT;
+
+  v_run_id BIGINT;
+  v_inserted INT := 0;
+  v_failed INT := 0;
+  v_status TEXT := 'running';
 BEGIN
   IF p_rows IS NULL OR jsonb_typeof(p_rows) <> 'array' THEN
     RAISE EXCEPTION 'p_rows must be JSON array';
@@ -28,6 +41,10 @@ BEGIN
 
   v_user_id := audit_get_user_id();
   v_len := jsonb_array_length(p_rows);
+
+  INSERT INTO import_runs(source, entity, total_rows, inserted_rows, failed_rows, fail_fast, status, user_id, meta)
+  VALUES (COALESCE(p_source, 'inventory_transactions_batch'), 'inventory_transactions', v_len, 0, 0, COALESCE(p_fail_fast, FALSE), 'running', v_user_id, p_meta)
+  RETURNING import_runs.run_id INTO v_run_id;
 
   FOR v_i IN 0..v_len-1 LOOP
     v_row := p_rows->v_i;
@@ -57,9 +74,14 @@ BEGIN
         v_transaction_type, v_quantity, v_unit_price, v_transaction_date, v_comment
       );
 
+      v_inserted := v_inserted + 1;
+
     EXCEPTION WHEN OTHERS THEN
-      INSERT INTO import_errors(source, payload, error_message, user_id, details)
+      v_failed := v_failed + 1;
+
+      INSERT INTO import_errors(run_id, source, payload, error_message, user_id, details)
       VALUES (
+        v_run_id,
         COALESCE(p_source, 'inventory_transactions_batch'),
         v_row,
         SQLERRM,
@@ -68,11 +90,46 @@ BEGIN
       );
 
       IF COALESCE(p_fail_fast, FALSE) THEN
-        RAISE;
+        v_status := 'failed';
+        EXIT;
       END IF;
     END;
   END LOOP;
 
+  IF v_status <> 'failed' THEN
+    IF v_failed > 0 THEN
+      v_status := 'completed_with_errors';
+    ELSE
+      v_status := 'completed';
+    END IF;
+  END IF;
+
+  UPDATE import_runs
+  SET
+    finished_at = now(),
+    inserted_rows = v_inserted,
+    failed_rows = v_failed,
+    status = v_status
+  WHERE import_runs.run_id = v_run_id;
+
+  run_id := v_run_id;
+  total_rows := v_len;
+  inserted_rows := v_inserted;
+  failed_rows := v_failed;
+  status := v_status;
+  RETURN NEXT;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_batch_import_inventory_transactions(
+  p_rows JSONB,
+  p_source TEXT DEFAULT 'inventory_transactions_batch',
+  p_fail_fast BOOLEAN DEFAULT FALSE
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM * FROM fn_batch_import_inventory_transactions(p_rows, p_source, p_fail_fast, NULL);
 END;
 $$;
 

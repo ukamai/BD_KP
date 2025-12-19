@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, DataError
 from sqlalchemy.orm import Session
@@ -11,8 +13,50 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[ProjectOut])
-def list_projects(db: Session = Depends(get_db)):
-    return db.execute(select(Project).order_by(Project.project_id)).scalars().all()
+def list_projects(
+    property_id: int | None = None,
+    contract_id: int | None = None,
+    status: str | None = None,
+    q: str | None = None,
+    start_from: date | None = None,
+    start_to: date | None = None,
+    sort_by: str = Query(default="project_id"),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    stmt = select(Project)
+    if property_id is not None:
+        stmt = stmt.where(Project.property_id == property_id)
+    if contract_id is not None:
+        stmt = stmt.where(Project.contract_id == contract_id)
+    if status is not None:
+        stmt = stmt.where(Project.status == status)
+    if q:
+        stmt = stmt.where(Project.project_name.ilike(f"%{q}%"))
+    if start_from is not None:
+        stmt = stmt.where(Project.planned_start_date >= start_from)
+    if start_to is not None:
+        stmt = stmt.where(Project.planned_start_date <= start_to)
+
+    sort_map = {
+        "project_id": Project.project_id,
+        "property_id": Project.property_id,
+        "contract_id": Project.contract_id,
+        "status": Project.status,
+        "total_budget": Project.total_budget,
+        "actual_cost": Project.actual_cost,
+        "planned_start_date": Project.planned_start_date,
+        "planned_end_date": Project.planned_end_date,
+        "created_at": Project.created_at,
+    }
+    col = sort_map.get(sort_by)
+    if col is None:
+        raise HTTPException(status_code=400, detail="Invalid sort_by")
+    col = col.desc() if sort_dir == "desc" else col.asc()
+
+    return db.execute(stmt.order_by(col).limit(limit).offset(offset)).scalars().all()
 
 
 @router.get("/{project_id}", response_model=ProjectOut)
@@ -86,12 +130,35 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{project_id}/tasks")
-def list_project_tasks(project_id: int, db: Session = Depends(get_db)):
+def list_project_tasks(
+    project_id: int,
+    status: str | None = None,
+    sort_by: str = Query(default="task_id"),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
     from app.db.models.task import ProjectTask
 
-    return db.execute(
-        select(ProjectTask).where(ProjectTask.project_id == project_id).order_by(ProjectTask.task_id)
-    ).scalars().all()
+    stmt = select(ProjectTask).where(ProjectTask.project_id == project_id)
+    if status is not None:
+        stmt = stmt.where(ProjectTask.status == status)
+
+    sort_map = {
+        "task_id": ProjectTask.task_id,
+        "status": ProjectTask.status,
+        "planned_cost": ProjectTask.planned_cost,
+        "actual_cost": ProjectTask.actual_cost,
+        "planned_start_date": ProjectTask.planned_start_date,
+        "planned_end_date": ProjectTask.planned_end_date,
+    }
+    col = sort_map.get(sort_by)
+    if col is None:
+        raise HTTPException(status_code=400, detail="Invalid sort_by")
+    col = col.desc() if sort_dir == "desc" else col.asc()
+
+    return db.execute(stmt.order_by(col).limit(limit).offset(offset)).scalars().all()
 
 
 @router.get("/{project_id}/phases")

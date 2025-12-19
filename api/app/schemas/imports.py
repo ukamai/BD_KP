@@ -23,8 +23,25 @@ class BatchImportRequest(BaseModel):
 
 class BatchImportResponse(BaseModel):
     run_id: int | None = None
+    total: int | None = None
     inserted: int | None = None
     failed: int | None = None
+    status: str | None = None
+
+
+class ImportRunOut(BaseModel):
+    run_id: int
+    started_at: object
+    finished_at: object | None = None
+    source: str
+    entity: str
+    total_rows: int
+    inserted_rows: int
+    failed_rows: int
+    fail_fast: bool
+    status: str
+    user_id: int | None = None
+    meta: dict | None = None
 
 
 class BatchImportFakerRequest(BaseModel):
