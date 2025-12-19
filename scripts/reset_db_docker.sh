@@ -30,7 +30,6 @@ run_sql sql/ddl/01_schema.sql
 run_sql sql/ddl/02_constraints.sql
 
 run_sql sql/triggers/01_triggers.sql
-
 run_sql sql/triggers/02_audit_triggers.sql
 
 run_sql sql/ddl/03_import_schema.sql
@@ -47,5 +46,9 @@ if [[ "${GENERATE_BIG_DATA:-0}" == "1" ]]; then
 fi
 
 run_sql sql/triggers/03_audit_crud.sql
+
+if [[ "${GENERATE_BIG_DATA:-0}" == "1" ]]; then
+  run_sql sql/dml/03_generate_audit_activity.sql
+fi
 
 echo "==> OK"
