@@ -1,4 +1,3 @@
--- EXPLAIN с индексами (после sql/indexes/01_indexes.sql)
 ANALYZE;
 
 EXPLAIN (ANALYZE, BUFFERS)

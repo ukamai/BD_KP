@@ -1,7 +1,5 @@
 BEGIN;
 
--- СКАЛЯРНАЯ ФУНКЦИЯ:
--- “Сколько всего потрачено по проекту” = actual_cost задач + стоимость OUT материалов + стоимость переделок (defects.rework_cost)
 CREATE OR REPLACE FUNCTION fn_project_total_spent(p_project_id BIGINT)
 RETURNS NUMERIC(14,2)
 LANGUAGE sql
@@ -27,8 +25,6 @@ AS $$
 $$;
 
 
--- ТАБЛИЧНАЯ ФУНКЦИЯ (отчёт):
--- Возвращает агрегаты по проектам с фильтрами.
 CREATE OR REPLACE FUNCTION fn_report_projects(
   p_status    TEXT DEFAULT NULL,
   p_date_from DATE DEFAULT NULL,

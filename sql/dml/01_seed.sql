@@ -22,18 +22,12 @@ TRUNCATE
   users
 RESTART IDENTITY CASCADE;
 
--- ======================
--- USERS
--- ======================
 INSERT INTO users (username, full_name, email, role)
 VALUES
   ('admin',   'Admin User',       'admin@example.com', 'admin'),
   ('manager', 'Project Manager',  'pm@example.com',    'manager'),
   ('inspector','Quality Inspector','qc@example.com',   'inspector');
 
--- ======================
--- OWNERS + PROPERTIES + ROOMS (2 объекта)
--- ======================
 INSERT INTO owners (full_name, phone, email, preferred_contact, notes)
 VALUES
   ('Иванов Иван Иванович', '+79990000001', 'ivanov@example.com', 'phone', 'Ключи у консьержа'),
@@ -56,7 +50,6 @@ VALUES
   'active'
 );
 
--- комнаты для 1-го объекта
 INSERT INTO property_rooms (property_id, room_name, room_type, area, ceiling_height, has_window, notes)
 VALUES
 (
@@ -72,7 +65,6 @@ VALUES
   'Санузел', 'bathroom', 4.30, 2.55, FALSE, 'Гидроизоляция обязательна'
 );
 
--- комнаты для 2-го объекта
 INSERT INTO property_rooms (property_id, room_name, room_type, area, ceiling_height, has_window, notes)
 VALUES
 (
@@ -88,9 +80,6 @@ VALUES
   'Коридор', 'hallway', 6.20, 2.70, FALSE, NULL
 );
 
--- ======================
--- CONTRACTORS + CONTRACTS (2 подрядчика / 2 договора)
--- ======================
 INSERT INTO contractors (name, inn, phone, email, specialization, rating)
 VALUES
   ('ООО "РемонтПрофи"',  '770123456789', '+79990000002', 'remontprofi@example.com', 'Отделка/плитка', 4.70),
@@ -119,9 +108,6 @@ VALUES
   DATE '2025-11-20'
 );
 
--- ======================
--- PROJECTS + PHASES (2 проекта)
--- ======================
 INSERT INTO projects (property_id, contract_id, project_name, status, total_budget, actual_cost, planned_start_date, planned_end_date)
 VALUES
 (
@@ -173,9 +159,6 @@ VALUES
   'Сдача', 3, 'planned', DATE '2026-01-11', DATE '2026-01-30'
 );
 
--- ======================
--- WORK TYPES
--- ======================
 INSERT INTO work_types (work_type_name, category, default_unit, standard_rate, is_active, description)
 VALUES
   ('Демонтаж',        'Подготовительные', 'm2',  350.00, TRUE, NULL),
@@ -185,11 +168,6 @@ VALUES
   ('Электромонтаж',   'Инженерные',       'pcs', 900.00, TRUE, 'Розетки/выводы'),
   ('Сантехника',      'Инженерные',       'pcs', 1200.00, TRUE, NULL);
 
--- ======================
--- TASKS (14 задач, разный статус, есть просрочка)
--- ======================
-
--- Проект 1: Примерная
 INSERT INTO project_tasks (
   project_id, phase_id, room_id, work_type_id, contractor_id,
   task_name, volume, planned_cost, actual_cost, status,
@@ -267,7 +245,6 @@ VALUES
   DATE '2025-12-03', DATE '2025-12-08', DATE '2025-12-04', NULL
 );
 
--- Проект 2: Новаторов
 INSERT INTO project_tasks (
   project_id, phase_id, room_id, work_type_id, contractor_id,
   task_name, volume, planned_cost, actual_cost, status,
@@ -345,9 +322,6 @@ VALUES
   DATE '2025-12-18', DATE '2025-12-20', NULL, NULL
 );
 
--- ======================
--- AUDIT (генерируем триггерами: set_config + несколько UPDATE status)
--- ======================
 SELECT set_config('app.user_id', (SELECT user_id::text FROM users WHERE username='manager'), true);
 
 UPDATE project_tasks
@@ -358,9 +332,6 @@ UPDATE purchase_orders
 SET status='ordered'
 WHERE po_number='PO-2025-0003';
 
--- ======================
--- ACCEPTANCE ACTS (для всех задач)
--- ======================
 INSERT INTO acceptance_acts (task_id, acceptance_date, accepted_by, result_status, comment)
 SELECT
   t.task_id,
@@ -374,9 +345,6 @@ SELECT
   END AS comment
 FROM project_tasks t;
 
--- ======================
--- MATERIALS + SUPPLIERS (6 материалов, 2 поставщика)
--- ======================
 INSERT INTO materials (material_name, category, unit, manufacturer, current_price, is_active)
 VALUES
   ('Плитка 20x20 белая', 'Плитка', 'pcs', 'Kerama', 120.00, TRUE),
@@ -391,9 +359,6 @@ VALUES
   ('СтройМаркет', '+79990000003', 'sales@stroymarket.example', 'г. Москва, ул. Складская, 1', 'Петров Пётр'),
   ('ДомРемонт',   '+79990000006', 'info@domremont.example',    'г. Москва, ул. Логистическая, 7', 'Иванова Мария');
 
--- ======================
--- PURCHASE ORDERS (3 заказа: delivered/ordered/draft)
--- ======================
 INSERT INTO purchase_orders (project_id, supplier_id, po_number, status, total_amount, order_date, expected_delivery_date)
 VALUES
 (
@@ -424,7 +389,6 @@ VALUES
   DATE '2025-12-20'
 );
 
--- позиции PO-2025-0001 (доставлено полностью)
 INSERT INTO purchase_order_items (po_id, material_id, quantity_ordered, unit_price, delivered_quantity, line_total)
 VALUES
 (
@@ -443,7 +407,6 @@ VALUES
   10, 210.00, 10, 0
 );
 
--- позиции PO-2025-0002 (частично доставлено)
 INSERT INTO purchase_order_items (po_id, material_id, quantity_ordered, unit_price, delivered_quantity, line_total)
 VALUES
 (
@@ -462,7 +425,6 @@ VALUES
   1, 7800.00, 0, 0
 );
 
--- позиции PO-2025-0003 (пока draft — но позиции можно уже набить)
 INSERT INTO purchase_order_items (po_id, material_id, quantity_ordered, unit_price, delivered_quantity, line_total)
 VALUES
 (
@@ -471,11 +433,6 @@ VALUES
   5, 390.00, 0, 0
 );
 
--- ======================
--- INVENTORY TRANSACTIONS (IN/OUT)
--- ======================
-
--- IN по PO-2025-0001 (всё доставлено)
 INSERT INTO inventory_transactions (project_id, material_id, task_id, po_item_id, transaction_type, quantity, unit_price, transaction_date, comment)
 SELECT
   (SELECT project_id FROM projects WHERE project_name='Ремонт квартиры (ул. Примерная)'),
@@ -490,7 +447,6 @@ SELECT
 FROM purchase_order_items i
 WHERE i.po_id = (SELECT po_id FROM purchase_orders WHERE po_number='PO-2025-0001');
 
--- OUT: списание плитки на фартук (Примерная)
 INSERT INTO inventory_transactions (project_id, material_id, task_id, po_item_id, transaction_type, quantity, unit_price, transaction_date, comment)
 VALUES
 (
@@ -516,7 +472,6 @@ VALUES
   'Списание клея на фартук'
 );
 
--- IN по PO-2025-0002 (частично)
 INSERT INTO inventory_transactions (project_id, material_id, task_id, po_item_id, transaction_type, quantity, unit_price, transaction_date, comment)
 SELECT
   (SELECT project_id FROM projects WHERE project_name='Ремонт квартиры (пр-т Новаторов)'),
@@ -532,7 +487,6 @@ FROM purchase_order_items i
 WHERE i.po_id = (SELECT po_id FROM purchase_orders WHERE po_number='PO-2025-0002')
   AND i.delivered_quantity > 0;
 
--- OUT: списание краски на "Покраска гостиной (просрочено)" (хотя задача planned — допустим подготовили материал)
 INSERT INTO inventory_transactions (project_id, material_id, task_id, po_item_id, transaction_type, quantity, unit_price, transaction_date, comment)
 VALUES
 (
@@ -547,9 +501,6 @@ VALUES
   'Списание краски под покраску'
 );
 
--- ======================
--- DEFECTS (несколько дефектов, разный статус)
--- ======================
 INSERT INTO defects (task_id, contractor_id, description, severity, status, defect_date, resolution_date, rework_cost)
 VALUES
 (
@@ -583,7 +534,6 @@ VALUES
   1500.00
 );
 
--- один апдейт дефекта, чтобы аудит зафиксировал смену статуса
 SELECT set_config('app.user_id', (SELECT user_id::text FROM users WHERE username='inspector'), true);
 
 UPDATE defects

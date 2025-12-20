@@ -1,23 +1,15 @@
--- =========================================
--- DEMO: показать работу триггеров и audit_log
--- =========================================
-
--- 0) Идентификация пользователя (аудит будет писать user_id)
 SELECT set_config('app.user_id', (SELECT user_id::text FROM users WHERE username='manager'), true);
 
--- 1) Триггер updated_at на properties
 SELECT property_id, address, updated_at FROM properties ORDER BY property_id;
 UPDATE properties
 SET address = address || ' (upd)'
 WHERE property_id = (SELECT MIN(property_id) FROM properties);
 SELECT property_id, address, updated_at FROM properties ORDER BY property_id;
 
--- 2) Триггер line_total и пересчёт purchase_orders.total_amount
 SELECT po_id, po_number, total_amount
 FROM purchase_orders
 WHERE po_number='PO-2025-0001';
 
--- добавим материал, которого ещё нет в заказе (избегаем uq_po_items_po_material)
 INSERT INTO purchase_order_items (po_id, material_id, quantity_ordered, unit_price, delivered_quantity, line_total)
 VALUES (
   (SELECT po_id FROM purchase_orders WHERE po_number='PO-2025-0001'),
@@ -43,7 +35,6 @@ SELECT po_id, po_number, total_amount
 FROM purchase_orders
 WHERE po_number='PO-2025-0001';
 
--- 3) Аудит: сменим статус задачи
 UPDATE project_tasks
 SET status='completed', actual_end_date=CURRENT_DATE
 WHERE task_name='Плитка на фартук';

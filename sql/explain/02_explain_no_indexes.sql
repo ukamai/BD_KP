@@ -1,5 +1,3 @@
--- EXPLAIN без наших индексов
--- (Убедись, что перед этим выполнен 01_drop_indexes.sql)
 ANALYZE;
 
 EXPLAIN (ANALYZE, BUFFERS)
